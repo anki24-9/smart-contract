@@ -1,0 +1,37 @@
+// SPDX-License-Identifier: GPL-3.0
+pragma solidity >=0.8.0;
+contract Game
+{
+    struct info{
+        uint id;
+        address _add;
+        uint randomno;
+        uint _balance;
+        }
+   mapping(uint=>info)public  Records;
+   address payable[] user;
+   uint public randomno;
+    //event Log(uint date,address from, uint number);
+   uint number=0;
+   uint id=0;
+   function getbalance() public view returns(uint)
+   {
+       return address(this).balance;
+   }
+   function bet()public  payable returns(uint,string memory)
+   {
+      number= uint(keccak256(abi.encodePacked(msg.sender,block.timestamp,number)))%10;
+       randomno=number;
+       uint _balance=getbalance();
+       address payable _add=payable(msg.sender);
+       Records[id]=info(id,_add,randomno,_balance);
+       // emit Log(block.timestamp,msg.sender,number);
+       require(msg.value==0.00200000 ether ,"your  transaction is failed!!!");
+        if(number<5)
+       {
+           _add.transfer(getbalance());
+       }
+       id++;
+       return (number,"The balance has been transferred to your account");
+   }
+}
