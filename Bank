@@ -1,0 +1,97 @@
+// SPDX-License-Identifier: GPL-3.0
+pragma solidity ^0.8.0;
+
+contract Bank{
+
+   address Accountholder;
+   uint deadline=1 minutes;
+   uint public NoofAccountholder;
+   uint _deadline;
+   struct account{
+       uint[] balance;
+       uint[] addbalance;
+       address Accountholder;
+       mapping(uint=>uint) principal;
+       mapping(uint=>uint) Penalty;
+       mapping(uint=>uint) Intrest;
+   }
+    mapping(address=>account)public Records;
+    mapping(address=>uint)  userAccount;
+    mapping(address=>bool) userExists;
+     
+   constructor()
+   {
+          Accountholder=msg.sender;
+         _deadline=block.timestamp+deadline;
+   }
+
+  
+  //   modifier onlyOwner {
+  //   require(msg.sender == Accountholder,'sorry!,you cannot Deposit & withdraw balance');
+  //  _;
+  //  }
+    function createAcc() public payable returns(string memory){
+      require(userExists[msg.sender]==false,'Account Already Created');
+        NoofAccountholder++;
+       if(msg.value==0){
+          userAccount[msg.sender]=0;
+          userExists[msg.sender]=true;
+          return 'account created';
+      }
+      require(userExists[msg.sender]==false,'account already created');
+      userAccount[msg.sender] = msg.value;
+      userExists[msg.sender] = true;
+      return 'account created';
+   }
+  function deposit( uint index) public payable   {
+         require(userExists[msg.sender]==true, 'Account is not created');
+         account storage acc=Records[msg.sender];
+         acc.Accountholder=msg.sender;
+         Records[msg.sender].addbalance.push(msg.value);
+         acc.balance.push(acc.addbalance[index]);
+         acc.addbalance[index]=msg.value;
+      }
+  function Accountbalance(uint index)public view returns(uint){
+     account storage acc=Records[msg.sender];
+     return acc.addbalance[index];
+   }
+  function time()public view returns(uint,uint){
+    return (block.timestamp,_deadline);
+  }
+   function interest(uint index)public returns(uint)
+   {
+     account storage acc=Records[msg.sender];
+     acc.principal[index]=(acc.addbalance[index]);//we cannot assign direct value in array ex.preincipal=addbalance
+     uint timeElapsed=_deadline;
+    return acc.principal[index] +uint((acc.principal[index] * 7 * timeElapsed) / (100 * 365 * 24 * 60 * 60));
+   }
+   function penalty(uint index) public  returns(uint){
+      account storage acc=Records[msg.sender];
+         acc.principal[index]=acc.addbalance[index];
+          return acc.principal[index] - uint((acc.principal[index]) * (3) / (100)); 
+    }
+  function withdraw(uint index) public  returns(uint) {
+      account storage acc=Records[msg.sender];
+      if(block.timestamp<_deadline )
+    {
+      acc.addbalance[index]=penalty(index);
+      Records[msg.sender].Penalty[index]=(acc.balance[index]-acc.addbalance[index]);
+    }
+  else if(block.timestamp > _deadline)
+     {
+           acc.addbalance[index]=interest(index);
+           Records[msg.sender].Intrest[index]=(acc.addbalance[index]-acc.balance[index]);
+     }
+       return (acc.addbalance[index]);
+    }
+     function withdrawalbalance(uint index) public view returns (uint) {
+          account storage acc=Records[msg.sender];
+          return acc.addbalance[index];
+    }
+    function Information(uint index)public view  returns(uint balance,uint addbalance,uint Penalty,uint Intrest,uint Time,address user)
+    {
+      account storage Acc=Records[msg.sender];
+     return (Acc.balance[index],Acc.addbalance[index],Acc.Penalty[index],Acc.Intrest[index],block.timestamp,Acc.Accountholder);
+    } 
+
+}
