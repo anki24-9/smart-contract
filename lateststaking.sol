@@ -1,186 +1,550 @@
-// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.9;
-
-import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
-import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
-import "@openzeppelin/contracts/security/Pausable.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Burnable.sol";
-import "@openzeppelin/contracts/utils/Counters.sol";
-import "@openzeppelin/contracts/token/common/ERC2981.sol";
+//SPDX-License-Identifier: UNLICENSED
+pragma solidity ^0.8.0;
 
 
-
-contract NFTMarketplace is Ownable {
-    // using SafeMath for uint256;
-    string  img="https://github.com/gajera-ankita/Images/tree/main/";
-    using Counters for Counters.Counter;
-    Counters.Counter private _itemsSold;
-    Counters.Counter private _itemsCount;
-    uint256  royaltyfee= 1;
-    uint256 public LISTING_FEE = 1 ether;
-    uint256 public  royaltyamount;
-    // The NFT contract
-    ERC721 public nftContract;
-     mapping(uint256 => mapping(address => uint256)) public bids;
-    mapping(uint256 => address) public highestBidder;
-    
-    struct Auction {
-            uint256  nftId;
-            uint256 highestBid;
-            address highestBidder;
-            uint256 endTime;
-   }
-    struct imageInfo {
-            uint Id; 
-            bool _isavailableforsale;
-            bool _isAvailableForAuction;
-            string imgContent;
-            uint nftPrice;
-            address nftOwner;
-    }
-     imageInfo[] public imageList;
-
-    mapping(uint256 => Auction) public auctions;
-    uint256 public nextAuctionId = 1;
-
-    event AuctionCreated(uint256 auctionId, uint256 tokenId, address seller);
-    event NFTListed(uint256 tokenId, bool isavailableforsale);
-    event NFTSold(uint256 tokenId, address buyer, uint256 price);
- 
-    constructor(address _nftContractAddress) {
-        nftContract = ERC721(_nftContractAddress);
-
+abstract contract Context {
+    function _msgSender() internal view virtual returns (address) {
+        return msg.sender;
     }
 
-     function uploadImage(uint nftId,uint imgContent, uint nftPrice,bool isavailableforauction) public onlyOwner {
-        // address towner = msg.sender; // The address of the caller becomes the "towner"
-        string memory str = Strings.toString(imgContent);
-        
-        string memory imgPath = string(abi.encodePacked(img, str, ".jpg"));
-        uint256 nftpriceEth=nftPrice*10**18 wei;
-        
-        imageList.push(imageInfo(nftId,false, isavailableforauction,imgPath, nftpriceEth,msg.sender));
-         nftContract._mint(msg.sender, nftId);
-       
+    function _msgData() internal view virtual returns (bytes calldata) {
+        return msg.data;
     }
+}
 
-    function startAuction(uint256 tokenId, uint256 startingBid, uint256 duration) external {
-         Auction storage auction = auctions[tokenId];
-            require(imageList[auction.nftId]._isAvailableForAuction==true);
-            require(imageList[tokenId].nftOwner == msg.sender, "You don't own this NFT");
-            require(imageList[tokenId]._isavailableforsale == false, "NFT is already listed for sale");
-        
-            uint256 auctionEndTime = block.timestamp + duration;
+interface IERC20 {
+    /**
+     * @dev Emitted when `value` tokens are moved from one account (`from`) to
+     * another (`to`).
+     *
+     * Note that `value` may be zero.
+     */
+    event Transfer(address indexed from, address indexed to, uint256 value);
 
-            auctions[nextAuctionId] = Auction({
-                nftId:tokenId,
-                highestBid: startingBid,
-                highestBidder: address(0),
-                endTime: auctionEndTime
-            });
+    /**
+     * @dev Emitted when the allowance of a `spender` for an `owner` is set by
+     * a call to {approve}. `value` is the new allowance.
+     */
+    event Approval(address indexed owner, address indexed spender, uint256 value);
 
-            imageList[tokenId]._isavailableforsale = true;
-            _itemsCount.increment();
+    /**
+     * @dev Returns the amount of tokens in existence.
+     */
+    function totalSupply() external view returns (uint256);
 
-            emit AuctionCreated(nextAuctionId, tokenId, msg.sender);
+    /**
+     * @dev Returns the amount of tokens owned by `account`.
+     */
+    function balanceOf(address account) external view returns (uint256);
 
-            nextAuctionId++;
-    }
-     function placeBid(uint256 auctionId) external payable {
-            Auction storage auction = auctions[auctionId];
-            require(auction.endTime > block.timestamp, "Auction has ended");
-            require(msg.value > auction.highestBid, "Bid must be higher than the current highest bid");
+    /**
+     * @dev Moves `amount` tokens from the caller's account to `to`.
+     *
+     * Returns a boolean value indicating whether the operation succeeded.
+     *
+     * Emits a {Transfer} event.
+     */
+    function transfer(address to, uint256 amount) external returns (bool);
 
-            
-            if (auction.highestBidder != address(0)) {
-                payable(auction.highestBidder).transfer(auction.highestBid);
-            }
+    /**
+     * @dev Returns the remaining number of tokens that `spender` will be
+     * allowed to spend on behalf of `owner` through {transferFrom}. This is
+     * zero by default.
+     *
+     * This value changes when {approve} or {transferFrom} are called.
+     */
+    function allowance(address owner, address spender) external view returns (uint256);
 
-            auction.highestBid = msg.value;
-            auction.highestBidder = msg.sender;
-     }
-    function endAuction(uint256 auctionId) external onlyOwner {
-            Auction storage auction = auctions[auctionId];
-          
-            require(auction.endTime <= block.timestamp, "Auction is still ongoing");
+   
+    function approve(address spender, uint256 amount) external returns (bool);
 
-            address seller = imageList[auction.nftId] .nftOwner;
-            address buyer = auction.highestBidder;
-            uint256 price = auction.highestBid;
+    /**
+     * @dev Moves `amount` tokens from `from` to `to` using the
+     * allowance mechanism. `amount` is then deducted from the caller's
+     * allowance.
+     *
+     * Returns a boolean value indicating whether the operation succeeded.
+     *
+     * Emits a {Transfer} event.
+     */
+    function transferFrom(
+        address from,
+        address to,
+        uint256 amount
+    ) external returns (bool);
+}
 
-            (nftContract)._transfer(seller, buyer, imageList[auction.nftId].Id);
-            nftContract.setApprovalForAll(buyer, true);
 
-            payable(seller).transfer(price);
+interface IERC20Metadata is IERC20 {
+    /**
+     * @dev Returns the name of the token.
+     */
+    function name() external view returns (string memory);
 
-          
-            imageList[auctionId]._isavailableforsale = false;
-            _itemsSold.increment();
+    /**
+     * @dev Returns the symbol of the token.
+     */
+    function symbol() external view returns (string memory);
 
-            
+    /**
+     * @dev Returns the decimals places of the token.
+     */
+    function decimals() external view returns (uint8);
 }
 
 
 
-    function listNFTForSale(uint256 tokenId) external payable {
-        require(imageList[tokenId]._isavailableforsale == false,"NFT is listed for sale");
-        require(imageList[tokenId].nftOwner == msg.sender,"You don't own this NFT");
-        if(msg.sender!=owner()){
-            require(msg.value==LISTING_FEE,"Insufficient funds to Listing the NFT");
-           
-             payable(owner()).transfer(LISTING_FEE);
-        }
-        imageList[tokenId]._isavailableforsale = true;
-        _itemsCount.increment();
-        emit NFTListed(tokenId, imageList[tokenId]._isavailableforsale);
+
+
+
+ 
+contract ERC20 is Context, IERC20, IERC20Metadata {
+    mapping(address => uint256) private _balances;
+
+    mapping(address => mapping(address => uint256)) private _allowances;
+
+    uint256 private _totalSupply;
+
+    string private _name;
+    string private _symbol;
+
+    /**
+     * @dev Sets the values for {name} and {symbol}.
+     *
+     * The default value of {decimals} is 18. To select a different value for
+     * {decimals} you should overload it.
+     *
+     * All two of these values are immutable: they can only be set once during
+     * construction.
+     */
+    constructor(string memory name_, string memory symbol_) {
+        _name = name_;
+        _symbol = symbol_;
     }
+
+    /**
+     * @dev Returns the name of the token.
+     */
+    function name() public view virtual override returns (string memory) {
+        return _name;
+    }
+
+    /**
+     * @dev Returns the symbol of the token, usually a shorter version of the
+     * name.
+     */
+    function symbol() public view virtual override returns (string memory) {
+        return _symbol;
+    }
+
+    /**
+     * @dev Returns the number of decimals used to get its user representation.
+     * For example, if `decimals` equals `2`, a balance of `505` tokens should
+     * be displayed to a user as `5.05` (`505 / 10 ** 2`).
+     *
+     * Tokens usually opt for a value of 18, imitating the relationship between
+     * Ether and Wei. This is the value {ERC20} uses, unless this function is
+     * overridden;
+     *
+     * NOTE: This information is only used for _display_ purposes: it in
+     * no way affects any of the arithmetic of the contract, including
+     * {IERC20-balanceOf} and {IERC20-transfer}.
+     */
+    function decimals() public view virtual override returns (uint8) {
+        return 18;
+    }
+
+    /**
+     * @dev See {IERC20-totalSupply}.
+     */
+    function totalSupply() public view virtual override returns (uint256) {
+        return _totalSupply;
+    }
+
+    /**
+     * @dev See {IERC20-balanceOf}.
+     */
+    function balanceOf(address account) public view virtual override returns (uint256) {
+        return _balances[account];
+    }
+
+    /**
+     * @dev See {IERC20-transfer}.
+     *
+     * Requirements:
+     *
+     * - `to` cannot be the zero address.
+     * - the caller must have a balance of at least `amount`.
+     */
+    function transfer(address to, uint256 amount) public virtual override returns (bool) {
+        address owner = _msgSender();
+        _transfer(owner, to, amount);
+        return true;
+    }
+
+    /**
+     * @dev See {IERC20-allowance}.
+     */
+    function allowance(address owner, address spender) public view virtual override returns (uint256) {
+        return _allowances[owner][spender];
+    }
+
+    /**
+     * @dev See {IERC20-approve}.
+     *
+     * NOTE: If `amount` is the maximum `uint256`, the allowance is not updated on
+     * `transferFrom`. This is semantically equivalent to an infinite approval.
+     *
+     * Requirements:
+     *
+     * - `spender` cannot be the zero address.
+     */
+    function approve(address spender, uint256 amount) public virtual override returns (bool) {
+        address owner = _msgSender();
+        _approve(owner, spender, amount);
+        return true;
+    }
+
+    /**
+     * @dev See {IERC20-transferFrom}.
+     *
+     * Emits an {Approval} event indicating the updated allowance. This is not
+     * required by the EIP. See the note at the beginning of {ERC20}.
+     *
+     * NOTE: Does not update the allowance if the current allowance
+     * is the maximum `uint256`.
+     *
+     * Requirements:
+     *
+     * - `from` and `to` cannot be the zero address.
+     * - `from` must have a balance of at least `amount`.
+     * - the caller must have allowance for ``from``'s tokens of at least
+     * `amount`.
+     */
+    function transferFrom(
+        address from,
+        address to,
+        uint256 amount
+    ) public virtual override returns (bool) {
+        address spender = _msgSender();
+        _spendAllowance(from, spender, amount);
+        _transfer(from, to, amount);
+        return true;
+    }
+
+    /**
+     * @dev Atomically increases the allowance granted to `spender` by the caller.
+     *
+     * This is an alternative to {approve} that can be used as a mitigation for
+     * problems described in {IERC20-approve}.
+     *
+     * Emits an {Approval} event indicating the updated allowance.
+     *
+     * Requirements:
+     *
+     * - `spender` cannot be the zero address.
+     */
+    function increaseAllowance(address spender, uint256 addedValue) public virtual returns (bool) {
+        address owner = _msgSender();
+        _approve(owner, spender, allowance(owner, spender) + addedValue);
+        return true;
+    }
+
+    /**
+     * @dev Atomically decreases the allowance granted to `spender` by the caller.
+     *
+     * This is an alternative to {approve} that can be used as a mitigation for
+     * problems described in {IERC20-approve}.
+     *
+     * Emits an {Approval} event indicating the updated allowance.
+     *
+     * Requirements:
+     *
+     * - `spender` cannot be the zero address.
+     * - `spender` must have allowance for the caller of at least
+     * `subtractedValue`.
+     */
+    function decreaseAllowance(address spender, uint256 subtractedValue) public virtual returns (bool) {
+        address owner = _msgSender();
+        uint256 currentAllowance = allowance(owner, spender);
+        require(currentAllowance >= subtractedValue, "ERC20: decreased allowance below zero");
+        unchecked {
+            _approve(owner, spender, currentAllowance - subtractedValue);
+        }
+
+        return true;
+    }
+
+    /**
+     * @dev Moves `amount` of tokens from `from` to `to`.
+     *
+     * This internal function is equivalent to {transfer}, and can be used to
+     * e.g. implement automatic token fees, slashing mechanisms, etc.
+     *
+     * Emits a {Transfer} event.
+     *
+     * Requirements:
+     *
+     * - `from` cannot be the zero address.
+     * - `to` cannot be the zero address.
+     * - `from` must have a balance of at least `amount`.
+     */
+    function _transfer(
+        address from,
+        address to,
+        uint256 amount
+    ) internal virtual {
+        require(from != address(0), "ERC20: transfer from the zero address");
+        require(to != address(0), "ERC20: transfer to the zero address");
+
+        _beforeTokenTransfer(from, to, amount);
+
+        uint256 fromBalance = _balances[from];
+        require(fromBalance >= amount, "ERC20: transfer amount exceeds balance");
+        unchecked {
+            _balances[from] = fromBalance - amount;
+            // Overflow not possible: the sum of all balances is capped by totalSupply, and the sum is preserved by
+            // decrementing then incrementing.
+            _balances[to] += amount;
+        }
+
+        emit Transfer(from, to, amount);
+
+        _afterTokenTransfer(from, to, amount);
+    }
+
+
+    
+
+    /** @dev Creates `amount` tokens and assigns them to `account`, increasing
+     * the total supply.
+     *
+     * Emits a {Transfer} event with `from` set to the zero address.
+     *
+     * Requirements:
+     *
+     * - `account` cannot be the zero address.
+     */
+    function _mint(address account, uint256 amount) internal virtual {
+        require(account != address(0), "ERC20: mint to the zero address");
+
+        _beforeTokenTransfer(address(0), account, amount);
+
+        _totalSupply += amount;
+        unchecked {
+            // Overflow not possible: balance + amount is at most totalSupply + amount, which is checked above.
+            _balances[account] += amount;
+        }
+        emit Transfer(address(0), account, amount);
+
+        _afterTokenTransfer(address(0), account, amount);
+    }
+
+    /**
+     * @dev Destroys `amount` tokens from `account`, reducing the
+     * total supply.
+     *
+     * Emits a {Transfer} event with `to` set to the zero address.
+     *
+     * Requirements:
+     *
+     * - `account` cannot be the zero address.
+     * - `account` must have at least `amount` tokens.
+     */
+    function _burn(address account, uint256 amount) internal virtual {
+        require(account != address(0), "ERC20: burn from the zero address");
+
+        _beforeTokenTransfer(account, address(0), amount);
+
+        uint256 accountBalance = _balances[account];
+        require(accountBalance >= amount, "ERC20: burn amount exceeds balance");
+        unchecked {
+            _balances[account] = accountBalance - amount;
+            // Overflow not possible: amount <= accountBalance <= totalSupply.
+            _totalSupply -= amount;
+        }
+
+        emit Transfer(account, address(0), amount);
+
+        _afterTokenTransfer(account, address(0), amount);
+    }
+
+    /**
+     * @dev Sets `amount` as the allowance of `spender` over the `owner` s tokens.
+     *
+     * This internal function is equivalent to `approve`, and can be used to
+     * e.g. set automatic allowances for certain subsystems, etc.
+     *
+     * Emits an {Approval} event.
+     *
+     * Requirements:
+     *
+     * - `owner` cannot be the zero address.
+     * - `spender` cannot be the zero address.
+     */
+    function _approve(
+        address owner,
+        address spender,
+        uint256 amount
+    ) internal virtual {
+        require(owner != address(0), "ERC20: approve from the zero address");
+        require(spender != address(0), "ERC20: approve to the zero address");
+
+        _allowances[owner][spender] = amount;
+        emit Approval(owner, spender, amount);
+    }
+
+    /**
+     * @dev Updates `owner` s allowance for `spender` based on spent `amount`.
+     *
+     * Does not update the allowance amount in case of infinite allowance.
+     * Revert if not enough allowance is available.
+     *
+     * Might emit an {Approval} event.
+     */
+    function _spendAllowance(
+        address owner,
+        address spender,
+        uint256 amount
+    ) internal virtual {
+        uint256 currentAllowance = allowance(owner, spender);
+        if (currentAllowance != type(uint256).max) {
+            require(currentAllowance >= amount, "ERC20: insufficient allowance");
+            unchecked {
+                _approve(owner, spender, currentAllowance - amount);
+            }
+        }
+    }
+
+    /**
+     * @dev Hook that is called before any transfer of tokens. This includes
+     * minting and burning.
+     *
+     * Calling conditions:
+     *
+     * - when `from` and `to` are both non-zero, `amount` of ``from``'s tokens
+     * will be transferred to `to`.
+     * - when `from` is zero, `amount` tokens will be minted for `to`.
+     * - when `to` is zero, `amount` of ``from``'s tokens will be burned.
+     * - `from` and `to` are never both zero.
+     *
+     * To learn more about hooks, head to xref:ROOT:extending-contracts.adoc#using-hooks[Using Hooks].
+     */
+    function _beforeTokenTransfer(
+        address from,
+        address to,
+        uint256 amount
+    ) internal virtual {}
 
   
-    function buyNFT(uint256 tokenId) external payable {
-        uint256 price = imageList[tokenId].nftPrice;
-        require(imageList[tokenId]._isavailableforsale == true,"NFT is not listed for sale");
-        require(msg.value >= price, "Insufficient funds to buy the NFT");
-        require(imageList[tokenId]._isAvailableForAuction== false, "Nft is  in an auction");
-        
-        address seller = nftContract.ownerOf(imageList[tokenId].Id);
-        address buyer = msg.sender;
-         imageList[tokenId]._isAvailableForAuction = false;
-         royaltyamount=calculateFee(price,royaltyfee);
-         payable(owner()).transfer(royaltyamount);
-         price -= royaltyamount;
-
-         (nftContract)._transfer(seller, buyer,imageList[tokenId].Id);
-         nftContract.setApprovalForAll(buyer, true);
-        _itemsSold.increment();
-        imageList[tokenId].nftOwner = buyer;   
-         payable(seller).transfer(price);
-        
-        
-        imageList[tokenId]._isavailableforsale = false;
-        
-        emit NFTSold(tokenId, buyer, price);
-    }
-    function updateprice(uint pricenft,uint nftid)public {
-        require(nftContract.ownerOf(imageList[nftid].Id) == msg.sender, "You do not own this NFT");
-        imageList[nftid].nftPrice=pricenft*10**18 wei;
-    }
-    // Withdraw funds from the contract (for the owner)
-    function withdrawFunds() external onlyOwner {
-        uint256 balance = address(this).balance;
-        require(balance > 0, "No balance to withdraw");
-        payable(owner()).transfer(balance);
-    }
-    function getItemsCount() public view returns(uint256) {
-        return _itemsCount.current();
-    }
-    function getItemsSold() public view returns(uint256) {
-        return _itemsSold.current();
-    }
-    function calculateFee( uint256 amount,uint256 royaltyFee) private pure  returns (uint256) {
-        return amount* (royaltyFee)/(10**2);
-    }
-    function CurrentTime()public view returns (uint256){
-        return block.timestamp;
-    }
+     
+    function _afterTokenTransfer(
+        address from,
+        address to,
+        uint256 amount
+    ) internal virtual {}
 }
+
+
+contract StakingContract  {
+    uint256 public maxAPY = 100;
+    uint256 public minAPY = 8;
+    uint256 public stakingPeriod = 1 minutes;
+    uint256 public bonusAPY = 50;
+    IERC20 public erc20;
+    struct Stake {
+        uint id;
+        uint256 amount;
+        uint256 startTime;
+        bool isActive;
+         uint reward;
+        uint penalty;
+         address user;
+        
+    }
+    mapping(address => Stake[]) public stakes;
+    
+    constructor(IERC20 ierc20) {
+        erc20=ierc20;
+    }
+
+    function stake(uint256 _amount,uint id) public {
+        require(_amount > 0, "Stake amount should be greater than 0");
+         erc20.transferFrom(msg.sender,address(this),_amount);
+        stakes[msg.sender].push(Stake(id,_amount, block.timestamp, true,0,0,msg.sender));
+    }
+
+ function withdraw(uint256 _stakeIndex) public {
+      
+        require(stakes[msg.sender][_stakeIndex].isActive == true, "Already withdrawn");
+        uint256 withdrawalAmount;
+        
+       if(block.timestamp >= stakes[msg.sender][_stakeIndex].startTime + stakingPeriod) {
+        // If withdrawal is after the staking period, add reward
+        stakes[msg.sender][_stakeIndex].reward = getPotentialReward(_stakeIndex);
+        withdrawalAmount = stakes[msg.sender][_stakeIndex].amount + stakes[msg.sender][_stakeIndex].reward ;
+       }
+       else {
+        // If withdrawal is before the staking period, apply penalty
+    stakes[msg.sender][_stakeIndex].penalty = calculatePenalty(_stakeIndex);
+        withdrawalAmount = stakes[msg.sender][_stakeIndex].amount - stakes[msg.sender][_stakeIndex].penalty;
+      }
+
+   
+        erc20.transfer(msg.sender, withdrawalAmount);//transfer
+        stakes[msg.sender][_stakeIndex].isActive = false;
+
+        stakes[msg.sender].push(Stake(_stakeIndex,withdrawalAmount, block.timestamp, true, stakes[msg.sender][_stakeIndex].reward, stakes[msg.sender][_stakeIndex].penalty,msg.sender));
+
+    }
+
+
+
+    function calculatePenalty(uint256 _stakeIndex) private view returns (uint256) {
+        Stake storage stake1 = stakes[msg.sender][_stakeIndex];
+        uint256 stakingTime = block.timestamp - stake1.startTime;
+
+        uint256 penaltyPercentage;
+        if (stakingTime < 3 minutes) {
+            penaltyPercentage = 0;
+        } else if (stakingTime > 3 minutes && stakingTime < 5 minutes) {
+            penaltyPercentage = 25;
+        } else if  (stakingTime > 5 minutes && stakingTime < 7 minutes) {
+            penaltyPercentage = 35;
+        } else if (stakingTime > 3 weeks &&stakingTime < 4 weeks) {
+            penaltyPercentage = 40;
+        } else {
+            penaltyPercentage = 5;
+        }
+
+        uint256 penalty = stake1.amount * penaltyPercentage / 100;
+        return penalty;
+  }
+  function getPotentialReward(uint256 _stakeIndex) public view returns (uint256) {
+        Stake storage stake2 = stakes[msg.sender][_stakeIndex];
+        uint256 potentialReward = stake2.amount * maxAPY / 100;
+        return potentialReward;
+  }
+
+        function getEarlyWithdrawalAmount(uint256 _stakeIndex) public view returns (uint256) {
+            Stake storage stake3 = stakes[msg.sender][_stakeIndex];
+            uint256 penalty = calculatePenalty(_stakeIndex);
+            uint256 withdrawalAmount = stake3.amount - penalty;
+            return withdrawalAmount;
+        }
+
+        function hasPenalty(uint256 _stakeIndex) public view returns (bool) {
+            Stake storage stake4 = stakes[msg.sender][_stakeIndex];
+            uint256 stakingTime = block.timestamp - stake4.startTime;
+            return stakingTime < stakingPeriod;
+        }
+
+        function getStakeCount() public view returns (uint256) {
+            return stakes[msg.sender].length;
+        }
+
+
+}
+
+
+      
